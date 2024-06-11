@@ -1493,6 +1493,13 @@ function ephemerisToLMST(et) {
     }
     return "";
 }
+function ephemerisToSCLK(et) {
+    var sclkStr = spiceInstance.sce2s(SPACECRAFT_ID, et);
+    // sclkStr = "1/0436236010-12059"
+    var split = sclkStr.substring(2).split("-");
+    var sclk = parseInt(split[0], 10) + parseInt(split[1], 10) / Math.pow(2, 16);
+    return sclk.toString();
+}
 function ephemerisToUTC(et) {
     return new Date(spiceInstance.et2utc(et, "ISOC", 100) + "Z");
 }
@@ -1513,6 +1520,19 @@ function utcStringToLmst(utc) {
         try {
             var et = spiceInstance.str2et(utc);
             return ephemerisToLMST(et);
+        }
+        catch (error) {
+            console.error(error);
+            return "";
+        }
+    }
+    return "no spice";
+}
+function utcStringToSCLK(utc) {
+    if (spiceInstance) {
+        try {
+            var et = spiceInstance.str2et(utc);
+            return ephemerisToSCLK(et);
         }
         catch (error) {
             console.error(error);
@@ -1650,14 +1670,14 @@ function getPlugin() {
                                         label: "UTC",
                                         parse: function (string) { return new Date(string); },
                                     },
-                                    // tertiary: {
-                                    //   format: (date: Date) => {
-                                    //     const dateWithoutTZ = date.toISOString().slice(0, -1);
-                                    //     return utcStringToSCLK(dateWithoutTZ);
-                                    //   },
-                                    //   label: "SCLK",
-                                    //   parse: (string: string) => new Date(string),
-                                    // },
+                                    tertiary: {
+                                        format: function (date) {
+                                            var dateWithoutTZ = date.toISOString().slice(0, -1);
+                                            return utcStringToSCLK(dateWithoutTZ);
+                                        },
+                                        label: "SCLK",
+                                        parse: function (string) { return new Date(string); },
+                                    },
                                     ticks: {
                                         getTicks: lmstTicks,
                                         tickLabelWidth: 110,

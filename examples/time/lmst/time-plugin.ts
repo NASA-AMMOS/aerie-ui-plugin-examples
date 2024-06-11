@@ -261,14 +261,14 @@ export async function getPlugin() {
           label: "UTC",
           parse: (string: string) => new Date(string),
         },
-        // tertiary: {
-        //   format: (date: Date) => {
-        //     const dateWithoutTZ = date.toISOString().slice(0, -1);
-        //     return utcStringToSCLK(dateWithoutTZ);
-        //   },
-        //   label: "SCLK",
-        //   parse: (string: string) => new Date(string),
-        // },
+        tertiary: {
+          format: (date: Date) => {
+            const dateWithoutTZ = date.toISOString().slice(0, -1);
+            return utcStringToSCLK(dateWithoutTZ);
+          },
+          label: "SCLK",
+          parse: (string: string) => new Date(string),
+        },
         ticks: {
           getTicks: lmstTicks,
           tickLabelWidth: 110,
