@@ -1,11 +1,15 @@
 import { bisector, range } from "d3-array";
 import { Spice } from "timecraftjs";
 
-const LMST_SC_ID: number = -168900; // Perseverence Rover Spacecraft ID
+// const LMST_SPACECRAFT_ID: number = -168900; // Perseverence Rover Spacecraft ID
+const SPACECRAFT_ID: number = 168; // Perseverence Rover Spacecraft ID
+const LMST_SPACECRAFT_ID = parseInt(`-${SPACECRAFT_ID}900 `, 10);
 const SPICE_LMST_RE: RegExp = /^\d\/(\d+):(\d{2}):(\d{2}):(\d{2}):(\d+)?$/;
 const DISPLAY_LMST_RE: RegExp =
   /^(Sol-)?(\d+)M(\d{2}):(\d{2}):(\d{2})(.(\d*))?$/;
-const LMST_FORMAT_STRING: string = "YYYYMHH:MM:SS";
+const LMST_FORMAT_STRING: string = "DDDDDMHH:MM:SS";
+// const SCLK_REGEX: RegExp =
+//   /^\d\/(?<seconds>\d+)(-|\\.|:|,|\\s)(?<fraction>\d+)$/;
 
 let spiceInstance: any = undefined;
 
@@ -62,11 +66,11 @@ function lmstToEphemeris(lmst: string): number {
     .substring(2);
   const sclkch = `${sol}:${hour}:${mins}:${secs}:${subsecs}`;
   // const sclkch = sol + ':' + hour + ':' + mins + ':' + secs + ':' + subsecs;
-  return spiceInstance.scs2e(LMST_SC_ID, sclkch);
+  return spiceInstance.scs2e(LMST_SPACECRAFT_ID, sclkch);
 }
 
 function ephemerisToLMST(et: number): string {
-  const lmst = spiceInstance.sce2s(LMST_SC_ID, et);
+  const lmst = spiceInstance.sce2s(LMST_SPACECRAFT_ID, et);
   // something like "1/01641:07:16:13:65583"
   const m = lmst.match(SPICE_LMST_RE);
   if (m) {
@@ -78,6 +82,15 @@ function ephemerisToLMST(et: number): string {
     return sol + "M" + hour + ":" + mins + ":" + secs + "." + subsecs;
   }
   return "";
+}
+
+function ephemerisToSCLK(et: number): string {
+  const sclkStr = spiceInstance.sce2s(SPACECRAFT_ID, et);
+  // sclkStr = "1/0436236010-12059"
+  const split: string[] = sclkStr.substring(2).split("-");
+  const sclk =
+    parseInt(split[0], 10) + parseInt(split[1], 10) / Math.pow(2, 16);
+  return sclk.toString();
 }
 
 function ephemerisToUTC(et: number): Date {
@@ -101,6 +114,19 @@ function utcStringToLmst(utc: string): string {
     try {
       const et = spiceInstance.str2et(utc);
       return ephemerisToLMST(et);
+    } catch (error) {
+      console.error(error);
+      return "";
+    }
+  }
+  return "no spice";
+}
+
+function utcStringToSCLK(utc: string): string {
+  if (spiceInstance) {
+    try {
+      const et = spiceInstance.str2et(utc);
+      return ephemerisToSCLK(et);
     } catch (error) {
       console.error(error);
       return "";
@@ -235,6 +261,14 @@ export async function getPlugin() {
           label: "UTC",
           parse: (string: string) => new Date(string),
         },
+        // tertiary: {
+        //   format: (date: Date) => {
+        //     const dateWithoutTZ = date.toISOString().slice(0, -1);
+        //     return utcStringToSCLK(dateWithoutTZ);
+        //   },
+        //   label: "SCLK",
+        //   parse: (string: string) => new Date(string),
+        // },
         ticks: {
           getTicks: lmstTicks,
           tickLabelWidth: 110,

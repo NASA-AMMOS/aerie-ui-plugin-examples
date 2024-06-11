@@ -1419,10 +1419,14 @@ class Spice {
 
 }
 
-var LMST_SC_ID = -168900; // Perseverence Rover Spacecraft ID
+// const LMST_SPACECRAFT_ID: number = -168900; // Perseverence Rover Spacecraft ID
+var SPACECRAFT_ID = 168; // Perseverence Rover Spacecraft ID
+var LMST_SPACECRAFT_ID = parseInt("-".concat(SPACECRAFT_ID, "900 "), 10);
 var SPICE_LMST_RE = /^\d\/(\d+):(\d{2}):(\d{2}):(\d{2}):(\d+)?$/;
 var DISPLAY_LMST_RE = /^(Sol-)?(\d+)M(\d{2}):(\d{2}):(\d{2})(.(\d*))?$/;
-var LMST_FORMAT_STRING = "YYYYMHH:MM:SS";
+var LMST_FORMAT_STRING = "DDDDDMHH:MM:SS";
+// const SCLK_REGEX: RegExp =
+//   /^\d\/(?<seconds>\d+)(-|\\.|:|,|\\s)(?<fraction>\d+)$/;
 var spiceInstance = undefined;
 // Mars seconds since Sol-0
 function msss0(lmst) {
@@ -1430,7 +1434,6 @@ function msss0(lmst) {
     var hours = +lmst.split("M")[1].split(":")[0];
     var minutes = +lmst.split("M")[1].split(":")[1];
     var seconds = +lmst.split("M")[1].split(":")[2];
-    // seconds = seconds.split('.')[0]
     var sss0 = sols * 86400 + hours * 3600 + minutes * 60 + seconds;
     return sss0;
 }
@@ -1474,10 +1477,10 @@ function lmstToEphemeris(lmst) {
         .substring(2);
     var sclkch = "".concat(sol, ":").concat(hour, ":").concat(mins, ":").concat(secs, ":").concat(subsecs);
     // const sclkch = sol + ':' + hour + ':' + mins + ':' + secs + ':' + subsecs;
-    return spiceInstance.scs2e(LMST_SC_ID, sclkch);
+    return spiceInstance.scs2e(LMST_SPACECRAFT_ID, sclkch);
 }
 function ephemerisToLMST(et) {
-    var lmst = spiceInstance.sce2s(LMST_SC_ID, et);
+    var lmst = spiceInstance.sce2s(LMST_SPACECRAFT_ID, et);
     // something like "1/01641:07:16:13:65583"
     var m = lmst.match(SPICE_LMST_RE);
     if (m) {
@@ -1521,39 +1524,14 @@ function utcStringToLmst(utc) {
 function lmstTicks(start, stop, tickCount) {
     var lmstStart = utcStringToLmst(start.toISOString().slice(0, -1));
     var lmstEnd = utcStringToLmst(stop.toISOString().slice(0, -1));
-    console.log("lmstStart :>> ", lmstStart);
-    console.log("lmstEnd :>> ", lmstEnd);
     var lsmtStartSeconds = msss0(lmstStart);
     var lsmtStartSols = lsmtStartSeconds / 60 / 60 / 24;
     var lsmtEndSeconds = msss0(lmstEnd);
     var lsmtEndSols = lsmtEndSeconds / 60 / 60 / 24;
     // TODO handle duration = 0 case
     var lmstDurationSeconds = lsmtEndSeconds - lsmtStartSeconds;
-    console.log("lsmtStartSols :>> ", lsmtStartSols);
-    console.log("lsmtEndSols :>> ", lsmtEndSols);
-    console.log("lsmtStartSeconds :>> ", lsmtStartSeconds);
-    console.log("lsmtEndSeconds :>> ", lsmtEndSeconds);
-    console.log("lmstDurationSeconds :>> ", lmstDurationSeconds);
-    // const minVal = start.getTime(); // utc ms
-    // const maxVal = stop.getTime(); // utc ms
-    // console.log('minVal :>> ', minVal);
-    // console.log('maxVal :>> ', maxVal);
     var stepSize;
-    // const labelWidth = 105;
-    // const allowedTicks = Math.floor((range[1] - range[0]) / labelWidth) + 1;
     var stepSizeSols = lmstDurationSeconds / 60 / 60 / 24 / tickCount;
-    // const earthMarsDayRatio = 1.0274912517;
-    // const dayInSeconds = 86400.0;
-    // const x1 = start.getTime(); // utc ms
-    // const x2 = stop.getTime(); // utc ms
-    // const durationUtcMs = x2 - x1;
-    // // const durationSols = ((durationUtcMs / 1000) * solSecond) / 60 / 60 / 24;
-    // const durationSols = (durationUtcMs / 1000 / 60 / 60 / 24) * earthMarsDayRatio;
-    // const solStepSize = durationSols / allowedTicks;
-    console.log("tickCount :>> ", tickCount);
-    // console.log('solStepSize :>> ', solStepSize);
-    // console.log('durationUtcMs :>> ', durationUtcMs);
-    // console.log('durationSols :>> ', durationSols);
     var dayInSeconds = 86400;
     var lmstSteps = [
         0.1 / dayInSeconds,
@@ -1596,12 +1574,9 @@ function lmstTicks(start, stop, tickCount) {
     var bisectTicks = bisector(function (d) { return d; }).left;
     var i = bisectTicks(lmstSteps, stepSizeSols, 0);
     stepSize = lmstSteps[i];
-    console.log("stepSize :>> ", stepSize);
     // round the domain to nearest step size values
     var minValRounded = Math.round(lsmtStartSols / stepSize) * stepSize;
     var maxValRounded = Math.round(lsmtEndSols / stepSize) * stepSize;
-    console.log("minValRounded :>> ", minValRounded);
-    console.log("maxValRounded :>> ", maxValRounded);
     var ticks = range(minValRounded, maxValRounded, stepSize)
         .map(function (x) { return lmstToUTC(msss0_to_lmst(x * 24 * 60 * 60)); })
         .filter(function (date) {
@@ -1635,7 +1610,7 @@ function initializeSpice() {
                     return [2 /*return*/, true];
                 case 3:
                     error_1 = _a.sent();
-                    console.log("Error initializing spice:", error_1);
+                    console.log("Error initializing Spice:", error_1);
                     return [2 /*return*/, false];
                 case 4: return [2 /*return*/];
             }
@@ -1675,6 +1650,14 @@ function getPlugin() {
                                         label: "UTC",
                                         parse: function (string) { return new Date(string); },
                                     },
+                                    // tertiary: {
+                                    //   format: (date: Date) => {
+                                    //     const dateWithoutTZ = date.toISOString().slice(0, -1);
+                                    //     return utcStringToSCLK(dateWithoutTZ);
+                                    //   },
+                                    //   label: "SCLK",
+                                    //   parse: (string: string) => new Date(string),
+                                    // },
                                     ticks: {
                                         getTicks: lmstTicks,
                                         tickLabelWidth: 110,
