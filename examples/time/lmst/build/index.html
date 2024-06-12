@@ -4,21 +4,20 @@
     const lib = await import("./time-plugin.js");
     const plugin = await lib.getPlugin();
     const date = new Date();
-    document.getElementById("date-input").innerHTML = date.toISOString();
+    document.getElementById("utc").innerHTML = date.toISOString();
     const lmst = plugin.time.primary.format(date);
     document.getElementById("lmst").innerHTML = lmst;
-    const sclk = plugin.time.tertiary.format(date);
+    const sclk = plugin.time.additional[0].format(date);
     document.getElementById("sclk").innerHTML = sclk;
     const outDate = plugin.time.primary.parse(lmst);
-    document.getElementById("date-output").innerHTML = outDate.toISOString();
   })();
 </script>
 <html>
   <body style="font-family: sans-serif">
     <h3>Aerie UI Time Plugin Example - Perseverance LMST</h3>
     <div>
-      <b>Input Date:</b>
-      <span id="date-input"></span>
+      <b>UTC:</b>
+      <span id="utc"></span>
     </div>
     <div>
       <b>LMST:</b>
@@ -27,10 +26,6 @@
     <div>
       <b>SCLK:</b>
       <span id="sclk"></span>
-    </div>
-    <div>
-      <b>Output Date:</b>
-      <span id="date-output"></span>
     </div>
   </body>
 </html>

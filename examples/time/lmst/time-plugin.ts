@@ -1,15 +1,13 @@
 import { bisector, range } from "d3-array";
 import { Spice } from "timecraftjs";
+import { differenceInDays, format } from "date-fns";
 
-// const LMST_SPACECRAFT_ID: number = -168900; // Perseverence Rover Spacecraft ID
 const SPACECRAFT_ID: number = 168; // Perseverence Rover Spacecraft ID
 const LMST_SPACECRAFT_ID = parseInt(`-${SPACECRAFT_ID}900 `, 10);
 const SPICE_LMST_RE: RegExp = /^\d\/(\d+):(\d{2}):(\d{2}):(\d{2}):(\d+)?$/;
 const DISPLAY_LMST_RE: RegExp =
   /^(Sol-)?(\d+)M(\d{2}):(\d{2}):(\d{2})(.(\d*))?$/;
 const LMST_FORMAT_STRING: string = "DDDDDMHH:MM:SS";
-// const SCLK_REGEX: RegExp =
-//   /^\d\/(?<seconds>\d+)(-|\\.|:|,|\\s)(?<fraction>\d+)$/;
 
 let spiceInstance: any = undefined;
 
@@ -65,7 +63,6 @@ function lmstToEphemeris(lmst: string): number {
     .toFixed(5)
     .substring(2);
   const sclkch = `${sol}:${hour}:${mins}:${secs}:${subsecs}`;
-  // const sclkch = sol + ':' + hour + ':' + mins + ':' + secs + ':' + subsecs;
   return spiceInstance.scs2e(LMST_SPACECRAFT_ID, sclkch);
 }
 
@@ -84,17 +81,29 @@ function ephemerisToLMST(et: number): string {
   return "";
 }
 
+function ephemerisToLST(et: number): string {
+  return spiceInstance.et2lst(et, 499, 0, "planetocentric");
+}
+
 function ephemerisToSCLK(et: number): string {
-  const sclkStr = spiceInstance.sce2s(SPACECRAFT_ID, et);
+  const sclkStr = spiceInstance.sce2s(-SPACECRAFT_ID, et);
   // sclkStr = "1/0436236010-12059"
   const split: string[] = sclkStr.substring(2).split("-");
   const sclk =
     parseInt(split[0], 10) + parseInt(split[1], 10) / Math.pow(2, 16);
-  return sclk.toString();
+  return sclk.toFixed();
 }
 
 function ephemerisToUTC(et: number): Date {
-  return new Date(spiceInstance.et2utc(et, "ISOC", 100) + "Z");
+  // Do not use more than 6 digits of precision since javascript date parsing will
+  // not correctly interpret more precise numbers correctly since ISO-8601 spec is vague
+  // This is not documented within JS Date parsing but can be seen by examining the output of
+  // the following two statements:
+  // new Date('2024 JUN 03 15:05:28.000001' + "Z").toISOString() -> '2024-06-03T15:05:28.000Z'
+  // new Date('2024 JUN 03 15:05:28.0000010000000' + "Z").toISOString() -> '2024-06-03T15:05:28.010Z'
+  // Notice the difference in the fractional seconds.
+  // Semi-related post https://stackoverflow.com/a/50570660
+  return new Date(spiceInstance.et2utc(et, "ISOC", 6) + "Z");
 }
 
 function lmstToUTC(lmst: string): Date {
@@ -109,11 +118,24 @@ function lmstToUTC(lmst: string): Date {
   return new Date();
 }
 
-function utcStringToLmst(utc: string): string {
+function utcStringToLMST(utc: string): string {
   if (spiceInstance) {
     try {
       const et = spiceInstance.str2et(utc);
       return ephemerisToLMST(et);
+    } catch (error) {
+      console.error(error);
+      return "";
+    }
+  }
+  return "no spice";
+}
+
+function utcStringToLST(utc: string): string {
+  if (spiceInstance) {
+    try {
+      const et = spiceInstance.str2et(utc);
+      return ephemerisToLST(et);
     } catch (error) {
       console.error(error);
       return "";
@@ -136,8 +158,8 @@ function utcStringToSCLK(utc: string): string {
 }
 
 export function lmstTicks(start: Date, stop: Date, tickCount: number): Date[] {
-  const lmstStart = utcStringToLmst(start.toISOString().slice(0, -1));
-  const lmstEnd = utcStringToLmst(stop.toISOString().slice(0, -1));
+  const lmstStart = utcStringToLMST(start.toISOString().slice(0, -1));
+  const lmstEnd = utcStringToLMST(stop.toISOString().slice(0, -1));
   const lsmtStartSeconds = msss0(lmstStart);
   const lsmtStartSols = lsmtStartSeconds / 60 / 60 / 24;
   const lsmtEndSeconds = msss0(lmstEnd);
@@ -241,6 +263,40 @@ function validateLMSTString(value: string): Promise<null | string> {
   });
 }
 
+const LMST_TIME = "HH:mm:ss";
+// 3613M04:04:13.84606
+const lmstPattern = /(\d+)M(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)/;
+const ROUNDING_MS = 500;
+
+// This function doesn't use surface epoch or mars seconds since it is purely for rounding times
+export function round(s: string) {
+  const m = s.match(lmstPattern);
+  if (m) {
+    const year = 2020;
+    const monthIndex = 0;
+    const dayOfMonth = 1;
+    const sol = parseInt(m[1], 10);
+    const hours = parseInt(m[2], 10);
+    const minutes = parseInt(m[3], 10);
+    const seconds = parseInt(m[4], 10);
+    const ms = m[5] ? ROUNDING_MS + 1000 * parseFloat(m[5]) : 0;
+    const t0 = new Date(year, monthIndex, dayOfMonth);
+    const d = new Date(
+      year,
+      monthIndex,
+      dayOfMonth,
+      hours,
+      minutes,
+      seconds,
+      ms
+    );
+
+    return `${sol + differenceInDays(d, t0)}M${format(d, LMST_TIME)}`;
+  }
+
+  return s;
+}
+
 export async function getPlugin() {
   const success = await initializeSpice();
   if (success) {
@@ -249,26 +305,27 @@ export async function getPlugin() {
         primary: {
           format: (date: Date) => {
             const dateWithoutTZ = date.toISOString().slice(0, -1);
-            return utcStringToLmst(dateWithoutTZ).slice(0, -6);
+            return round(utcStringToLMST(dateWithoutTZ));
           },
           formatString: LMST_FORMAT_STRING,
           label: "LMST",
           parse: lmstToUTC,
           validate: validateLMSTString,
         },
-        secondary: {
-          format: (date: Date) => date.toISOString().slice(0, -5),
-          label: "UTC",
-          parse: (string: string) => new Date(string),
-        },
-        tertiary: {
-          format: (date: Date) => {
-            const dateWithoutTZ = date.toISOString().slice(0, -1);
-            return utcStringToSCLK(dateWithoutTZ);
+        additional: [
+          {
+            format: (date: Date) => {
+              const dateWithoutTZ = date.toISOString().slice(0, -1);
+              return utcStringToSCLK(dateWithoutTZ);
+            },
+            label: "SCLK",
           },
-          label: "SCLK",
-          parse: (string: string) => new Date(string),
-        },
+          {
+            format: (date: Date) => date.toISOString().slice(0, -5),
+            label: "UTC",
+            parse: (string: string) => new Date(string),
+          },
+        ],
         ticks: {
           getTicks: lmstTicks,
           tickLabelWidth: 110,
