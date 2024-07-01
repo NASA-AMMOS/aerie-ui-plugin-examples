@@ -310,7 +310,7 @@ export async function getPlugin() {
         enableDatePicker: false,
         primary: {
           format: formatPrimaryTime,
-          formatShort: (date: Date) => formatPrimaryTime(date).split("M")[0],
+          formatShort: formatPrimaryTime,
           formatString: LMST_FORMAT_STRING,
           formatTick: formatTickLMST,
           label: "LMST",
