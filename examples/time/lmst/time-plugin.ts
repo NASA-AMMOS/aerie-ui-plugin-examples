@@ -13,12 +13,17 @@ let spiceInstance: any = undefined;
 
 // Mars seconds since Sol-0
 function msss0(lmst: string): number {
-  const sols = +lmst.split("M")[0];
-  const hours = +lmst.split("M")[1].split(":")[0];
-  const minutes = +lmst.split("M")[1].split(":")[1];
-  const seconds = +lmst.split("M")[1].split(":")[2];
-  const sss0 = sols * 86400 + hours * 3600 + minutes * 60 + seconds;
-  return sss0;
+  try {
+    const sols = +lmst.split("M")[0];
+    const hours = +lmst.split("M")[1].split(":")[0];
+    const minutes = +lmst.split("M")[1].split(":")[1];
+    const seconds = +lmst.split("M")[1].split(":")[2];
+    const sss0 = sols * 86400 + hours * 3600 + minutes * 60 + seconds;
+    return sss0;
+  } catch (err) {
+    console.log("LMST Plugin Error: msss0:", lmst, err);
+    return NaN;
+  }
 }
 
 function msss0_to_lmst(msss0: number): string {
@@ -124,20 +129,7 @@ function utcStringToLMST(utc: string): string {
       const et = spiceInstance.str2et(utc);
       return ephemerisToLMST(et);
     } catch (error) {
-      console.error(error);
-      return "";
-    }
-  }
-  return "no spice";
-}
-
-function utcStringToLST(utc: string): string {
-  if (spiceInstance) {
-    try {
-      const et = spiceInstance.str2et(utc);
-      return ephemerisToLST(et);
-    } catch (error) {
-      console.error(error);
+      console.error("LMST Plugin Error: utcStringToLMST:", utc, error);
       return "";
     }
   }
@@ -297,17 +289,30 @@ export function round(s: string) {
   return s;
 }
 
+function formatPrimaryTime(date: Date) {
+  const dateWithoutTZ = date.toISOString().slice(0, -1);
+  return round(utcStringToLMST(dateWithoutTZ));
+}
+
+function formatTickLMST(
+  date: Date,
+  viewDurationMs: number,
+  tickCount: number
+): string {
+  return formatPrimaryTime(date);
+}
+
 export async function getPlugin() {
   const success = await initializeSpice();
   if (success) {
     return {
       time: {
+        enableDatePicker: false,
         primary: {
-          format: (date: Date) => {
-            const dateWithoutTZ = date.toISOString().slice(0, -1);
-            return round(utcStringToLMST(dateWithoutTZ));
-          },
+          format: formatPrimaryTime,
+          formatShort: (date: Date) => formatPrimaryTime(date).split("M")[0],
           formatString: LMST_FORMAT_STRING,
+          formatTick: formatTickLMST,
           label: "LMST",
           parse: lmstToUTC,
           validate: validateLMSTString,
@@ -323,12 +328,11 @@ export async function getPlugin() {
           {
             format: (date: Date) => date.toISOString().slice(0, -5),
             label: "UTC",
-            parse: (string: string) => new Date(string),
           },
         ],
         ticks: {
           getTicks: lmstTicks,
-          tickLabelWidth: 110,
+          maxLabelWidth: 110,
         },
       },
     };

@@ -4251,23 +4251,26 @@ function cleanEscapedString(input) {
   return matched[1].replace(doubleQuoteRegExp, "'");
 }
 
-// const LMST_SPACECRAFT_ID: number = -168900; // Perseverence Rover Spacecraft ID
 var SPACECRAFT_ID = 168; // Perseverence Rover Spacecraft ID
 var LMST_SPACECRAFT_ID = parseInt("-".concat(SPACECRAFT_ID, "900 "), 10);
 var SPICE_LMST_RE = /^\d\/(\d+):(\d{2}):(\d{2}):(\d{2}):(\d+)?$/;
 var DISPLAY_LMST_RE = /^(Sol-)?(\d+)M(\d{2}):(\d{2}):(\d{2})(.(\d*))?$/;
 var LMST_FORMAT_STRING = "DDDDDMHH:MM:SS";
-// const SCLK_REGEX: RegExp =
-//   /^\d\/(?<seconds>\d+)(-|\\.|:|,|\\s)(?<fraction>\d+)$/;
 var spiceInstance = undefined;
 // Mars seconds since Sol-0
 function msss0(lmst) {
-    var sols = +lmst.split("M")[0];
-    var hours = +lmst.split("M")[1].split(":")[0];
-    var minutes = +lmst.split("M")[1].split(":")[1];
-    var seconds = +lmst.split("M")[1].split(":")[2];
-    var sss0 = sols * 86400 + hours * 3600 + minutes * 60 + seconds;
-    return sss0;
+    try {
+        var sols = +lmst.split("M")[0];
+        var hours = +lmst.split("M")[1].split(":")[0];
+        var minutes = +lmst.split("M")[1].split(":")[1];
+        var seconds = +lmst.split("M")[1].split(":")[2];
+        var sss0 = sols * 86400 + hours * 3600 + minutes * 60 + seconds;
+        return sss0;
+    }
+    catch (err) {
+        console.log("LMST Plugin Error: msss0:", lmst, err);
+        return NaN;
+    }
 }
 function msss0_to_lmst(msss0) {
     var sols = String(Math.floor(msss0 / 86400));
@@ -4361,7 +4364,7 @@ function utcStringToLMST(utc) {
             return ephemerisToLMST(et);
         }
         catch (error) {
-            console.error(error);
+            console.error("LMST Plugin Error: utcStringToLMST:", utc, error);
             return "";
         }
     }
@@ -4505,6 +4508,13 @@ function round(s) {
     }
     return s;
 }
+function formatPrimaryTime(date) {
+    var dateWithoutTZ = date.toISOString().slice(0, -1);
+    return round(utcStringToLMST(dateWithoutTZ));
+}
+function formatTickLMST(date, viewDurationMs, tickCount) {
+    return formatPrimaryTime(date);
+}
 function getPlugin() {
     return __awaiter(this, void 0, void 0, function () {
         var success;
@@ -4516,12 +4526,12 @@ function getPlugin() {
                     if (success) {
                         return [2 /*return*/, {
                                 time: {
+                                    enableDatePicker: false,
                                     primary: {
-                                        format: function (date) {
-                                            var dateWithoutTZ = date.toISOString().slice(0, -1);
-                                            return round(utcStringToLMST(dateWithoutTZ));
-                                        },
+                                        format: formatPrimaryTime,
+                                        formatShort: function (date) { return formatPrimaryTime(date).split("M")[0]; },
                                         formatString: LMST_FORMAT_STRING,
+                                        formatTick: formatTickLMST,
                                         label: "LMST",
                                         parse: lmstToUTC,
                                         validate: validateLMSTString,
@@ -4537,12 +4547,11 @@ function getPlugin() {
                                         {
                                             format: function (date) { return date.toISOString().slice(0, -5); },
                                             label: "UTC",
-                                            parse: function (string) { return new Date(string); },
                                         },
                                     ],
                                     ticks: {
                                         getTicks: lmstTicks,
-                                        tickLabelWidth: 110,
+                                        maxLabelWidth: 110,
                                     },
                                 },
                             }];
