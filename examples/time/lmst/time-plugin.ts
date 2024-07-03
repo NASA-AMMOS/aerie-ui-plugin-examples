@@ -308,6 +308,12 @@ export async function getPlugin() {
     return {
       time: {
         enableDatePicker: false,
+        getDefaultPlanEndDate: (start: Date) => {
+          // Format to LMST, add a sol, parse back to Date
+          const lmst = formatPrimaryTime(start);
+          const sols = +lmst.split("M")[0];
+          return lmstToUTC(`${sols + 1}M${lmst.split("M")[1]}`);
+        },
         primary: {
           format: formatPrimaryTime,
           formatShort: formatPrimaryTime,

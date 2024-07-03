@@ -4527,6 +4527,12 @@ function getPlugin() {
                         return [2 /*return*/, {
                                 time: {
                                     enableDatePicker: false,
+                                    getDefaultPlanEndDate: function (start) {
+                                        // Format to LMST, add a day, parse back to Date
+                                        var lmst = formatPrimaryTime(start);
+                                        var sols = +lmst.split("M")[0];
+                                        return lmstToUTC("".concat(sols + 1, "M").concat(lmst.split("M")[1]));
+                                    },
                                     primary: {
                                         format: formatPrimaryTime,
                                         formatShort: formatPrimaryTime,

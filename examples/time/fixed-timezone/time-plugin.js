@@ -22,11 +22,12 @@ export async function getPlugin() {
   console.log("Plugin loaded");
   return {
     time: {
-      secondary: {
-        format: (date) => date.toLocaleString("en-US", { timeZone }),
-        label: getTimeZoneShortName(timeZone),
-        parse: (dateString) => new Date(dateString),
-      },
+      additional: [
+        {
+          format: (date) => date.toLocaleString("en-US", { timeZone }),
+          label: getTimeZoneShortName(timeZone),
+        },
+      ],
     },
   };
 }
