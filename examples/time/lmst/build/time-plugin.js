@@ -4254,7 +4254,7 @@ function cleanEscapedString(input) {
 var SPACECRAFT_ID = 168; // Perseverence Rover Spacecraft ID
 var LMST_SPACECRAFT_ID = parseInt("-".concat(SPACECRAFT_ID, "900 "), 10);
 var SPICE_LMST_RE = /^\d\/(\d+):(\d{2}):(\d{2}):(\d{2}):(\d+)?$/;
-var DISPLAY_LMST_RE = /^(Sol-)?(\d+)M(\d{2}):(\d{2}):(\d{2})(.(\d*))?$/;
+var DISPLAY_LMST_RE = /^(\d+)M(\d{2}):(\d{2}):(\d{2})(\.(\d+))?$/;
 var LMST_FORMAT_STRING = "DDDDDMHH:MM:SS";
 var spiceInstance = undefined;
 // Mars seconds since Sol-0
@@ -4303,11 +4303,11 @@ function lmstToEphemeris(lmst) {
     if (!matcher) {
         return NaN;
     }
-    var sol = trimLeadingZeroes(matcher[2] || "");
-    var hour = matcher[3] || "";
-    var mins = matcher[4] || "";
-    var secs = matcher[5] || "";
-    var subsecs = parseFloat(matcher[6] || "0")
+    var sol = trimLeadingZeroes(matcher[1] || "");
+    var hour = matcher[2] || "";
+    var mins = matcher[3] || "";
+    var secs = matcher[4] || "";
+    var subsecs = parseFloat(matcher[5] || "0")
         .toFixed(5)
         .substring(2);
     var sclkch = "".concat(sol, ":").concat(hour, ":").concat(mins, ":").concat(secs, ":").concat(subsecs);
@@ -4355,7 +4355,7 @@ function lmstToUTC(lmst) {
             console.log("LMST Plugin Error: lmstToUTC:", error);
         }
     }
-    return new Date();
+    return new Date(Number.MAX_SAFE_INTEGER);
 }
 function utcStringToLMST(utc) {
     if (spiceInstance) {
@@ -4471,7 +4471,6 @@ function initializeSpice() {
                         initializingSpice.loadKernel(kernelBuffers[i]);
                     }
                     spiceInstance = initializingSpice;
-                    // Set error action on spice to report instead of abort which exits
                     spiceInstance.erract("SET", "REPORT");
                     // Log stderr and stdour and reset spice if failed
                     // TODO not seeing stdErr, spice/timecraft may not be reporting these errors to stderr under "REPORT"
@@ -4480,15 +4479,23 @@ function initializeSpice() {
                     // particular function failed.
                     // Currently if parsing fails, say on a sol out of range, an invalid date will be returned
                     spiceInstance.onStdErr = function (err) {
-                        console.error(err);
                         if (spiceInstance.failed()) {
+                            var msg = spiceInstance.getmsg("LONG");
+                            console.error(msg);
                             spiceInstance.reset();
                         }
+                        else {
+                            console.error(err);
+                        }
                     };
-                    spiceInstance.onStdOut = function (err) {
-                        console.log(err);
+                    spiceInstance.onStdOut = function (string) {
                         if (spiceInstance.failed()) {
+                            var msg = spiceInstance.getmsg("LONG");
+                            console.error(msg);
                             spiceInstance.reset();
+                        }
+                        else {
+                            console.log(string);
                         }
                     };
                     console.log("Spice initialized", spiceInstance);

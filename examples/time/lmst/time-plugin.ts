@@ -5,8 +5,7 @@ import { differenceInDays, format } from "date-fns";
 const SPACECRAFT_ID: number = 168; // Perseverence Rover Spacecraft ID
 const LMST_SPACECRAFT_ID = parseInt(`-${SPACECRAFT_ID}900 `, 10);
 const SPICE_LMST_RE: RegExp = /^\d\/(\d+):(\d{2}):(\d{2}):(\d{2}):(\d+)?$/;
-const DISPLAY_LMST_RE: RegExp =
-  /^(Sol-)?(\d+)M(\d{2}):(\d{2}):(\d{2})(.(\d*))?$/;
+const DISPLAY_LMST_RE: RegExp = /^(\d+)M(\d{2}):(\d{2}):(\d{2})(\.(\d+))?$/;
 const LMST_FORMAT_STRING: string = "DDDDDMHH:MM:SS";
 
 let spiceInstance: any = undefined;
@@ -60,11 +59,11 @@ function lmstToEphemeris(lmst: string): number {
     return NaN;
   }
 
-  const sol = trimLeadingZeroes(matcher[2] || "");
-  const hour = matcher[3] || "";
-  const mins = matcher[4] || "";
-  const secs = matcher[5] || "";
-  const subsecs = parseFloat(matcher[6] || "0")
+  const sol = trimLeadingZeroes(matcher[1] || "");
+  const hour = matcher[2] || "";
+  const mins = matcher[3] || "";
+  const secs = matcher[4] || "";
+  const subsecs = parseFloat(matcher[5] || "0")
     .toFixed(5)
     .substring(2);
   const sclkch = `${sol}:${hour}:${mins}:${secs}:${subsecs}`;
@@ -116,7 +115,7 @@ function lmstToUTC(lmst: string): Date {
       console.log("LMST Plugin Error: lmstToUTC:", error);
     }
   }
-  return new Date();
+  return new Date(Number.MAX_SAFE_INTEGER);
 }
 
 function utcStringToLMST(utc: string): string {
@@ -239,7 +238,6 @@ async function initializeSpice() {
     }
     spiceInstance = initializingSpice;
 
-    // Set error action on spice to report instead of abort which exits
     spiceInstance.erract("SET", "REPORT");
 
     // Log stderr and stdour and reset spice if failed
@@ -249,15 +247,21 @@ async function initializeSpice() {
     // particular function failed.
     // Currently if parsing fails, say on a sol out of range, an invalid date will be returned
     spiceInstance.onStdErr = (err: string) => {
-      console.error(err);
       if (spiceInstance.failed()) {
+        const msg = spiceInstance.getmsg("LONG");
+        console.error(msg);
         spiceInstance.reset();
+      } else {
+        console.error(err);
       }
     };
-    spiceInstance.onStdOut = (err: string) => {
-      console.log(err);
+    spiceInstance.onStdOut = (string: string) => {
       if (spiceInstance.failed()) {
+        const msg = spiceInstance.getmsg("LONG");
+        console.error(msg);
         spiceInstance.reset();
+      } else {
+        console.log(string);
       }
     };
 
