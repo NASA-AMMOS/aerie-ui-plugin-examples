@@ -86,10 +86,6 @@ function ephemerisToLMST(et: number): string {
   return "";
 }
 
-function ephemerisToLST(et: number): string {
-  return spiceInstance.et2lst(et, 499, 0, "planetocentric");
-}
-
 function ephemerisToSCLK(et: number): string {
   const sclkStr = spiceInstance.sce2s(-SPACECRAFT_ID, et);
   // sclkStr = "1/0436236010-12059"
@@ -117,7 +113,7 @@ function lmstToUTC(lmst: string): Date {
       const et = lmstToEphemeris(lmst);
       return ephemerisToUTC(et);
     } catch (error) {
-      console.log("error :>> ", error);
+      console.log("LMST Plugin Error: lmstToUTC:", error);
     }
   }
   return new Date();
@@ -130,10 +126,10 @@ function utcStringToLMST(utc: string): string {
       return ephemerisToLMST(et);
     } catch (error) {
       console.error("LMST Plugin Error: utcStringToLMST:", utc, error);
-      return "";
+      return "Invalid";
     }
   }
-  return "no spice";
+  return "Invalid";
 }
 
 function utcStringToSCLK(utc: string): string {
@@ -143,15 +139,18 @@ function utcStringToSCLK(utc: string): string {
       return ephemerisToSCLK(et);
     } catch (error) {
       console.error(error);
-      return "";
+      return "Invalid";
     }
   }
-  return "no spice";
+  return "Invalid";
 }
 
 export function lmstTicks(start: Date, stop: Date, tickCount: number): Date[] {
   const lmstStart = utcStringToLMST(start.toISOString().slice(0, -1));
   const lmstEnd = utcStringToLMST(stop.toISOString().slice(0, -1));
+  if (!lmstStart || !lmstEnd) {
+    return [];
+  }
   const lsmtStartSeconds = msss0(lmstStart);
   const lsmtStartSols = lsmtStartSeconds / 60 / 60 / 24;
   const lsmtEndSeconds = msss0(lmstEnd);
@@ -239,7 +238,30 @@ async function initializeSpice() {
       initializingSpice.loadKernel(kernelBuffers[i]);
     }
     spiceInstance = initializingSpice;
-    console.log("Spice initialized");
+
+    // Set error action on spice to report instead of abort which exits
+    spiceInstance.erract("SET", "REPORT");
+
+    // Log stderr and stdour and reset spice if failed
+    // TODO not seeing stdErr, spice/timecraft may not be reporting these errors to stderr under "REPORT"
+    // mode so our try/catch exceptions may not be getting called. Need to sort out best way of handling
+    // errors from spice/timecraft and figure out if it is plugin or aerie UI that needs to know if a
+    // particular function failed.
+    // Currently if parsing fails, say on a sol out of range, an invalid date will be returned
+    spiceInstance.onStdErr = (err: string) => {
+      console.error(err);
+      if (spiceInstance.failed()) {
+        spiceInstance.reset();
+      }
+    };
+    spiceInstance.onStdOut = (err: string) => {
+      console.log(err);
+      if (spiceInstance.failed()) {
+        spiceInstance.reset();
+      }
+    };
+
+    console.log("Spice initialized", spiceInstance);
     return true;
   } catch (error) {
     console.log("Error initializing Spice:", error);
@@ -261,7 +283,7 @@ const lmstPattern = /(\d+)M(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)/;
 const ROUNDING_MS = 500;
 
 // This function doesn't use surface epoch or mars seconds since it is purely for rounding times
-export function round(s: string) {
+export function roundLMST(s: string) {
   const m = s.match(lmstPattern);
   if (m) {
     const year = 2020;
@@ -291,7 +313,7 @@ export function round(s: string) {
 
 function formatPrimaryTime(date: Date) {
   const dateWithoutTZ = date.toISOString().slice(0, -1);
-  return round(utcStringToLMST(dateWithoutTZ));
+  return roundLMST(utcStringToLMST(dateWithoutTZ));
 }
 
 function formatTickLMST(

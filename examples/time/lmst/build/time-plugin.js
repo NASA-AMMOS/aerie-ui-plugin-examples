@@ -4352,7 +4352,7 @@ function lmstToUTC(lmst) {
             return ephemerisToUTC(et);
         }
         catch (error) {
-            console.log("error :>> ", error);
+            console.log("LMST Plugin Error: lmstToUTC:", error);
         }
     }
     return new Date();
@@ -4365,10 +4365,10 @@ function utcStringToLMST(utc) {
         }
         catch (error) {
             console.error("LMST Plugin Error: utcStringToLMST:", utc, error);
-            return "";
+            return "Invalid";
         }
     }
-    return "no spice";
+    return "Invalid";
 }
 function utcStringToSCLK(utc) {
     if (spiceInstance) {
@@ -4378,14 +4378,17 @@ function utcStringToSCLK(utc) {
         }
         catch (error) {
             console.error(error);
-            return "";
+            return "Invalid";
         }
     }
-    return "no spice";
+    return "Invalid";
 }
 function lmstTicks(start, stop, tickCount) {
     var lmstStart = utcStringToLMST(start.toISOString().slice(0, -1));
     var lmstEnd = utcStringToLMST(stop.toISOString().slice(0, -1));
+    if (!lmstStart || !lmstEnd) {
+        return [];
+    }
     var lsmtStartSeconds = msss0(lmstStart);
     var lsmtStartSols = lsmtStartSeconds / 60 / 60 / 24;
     var lsmtEndSeconds = msss0(lmstEnd);
@@ -4468,7 +4471,27 @@ function initializeSpice() {
                         initializingSpice.loadKernel(kernelBuffers[i]);
                     }
                     spiceInstance = initializingSpice;
-                    console.log("Spice initialized");
+                    // Set error action on spice to report instead of abort which exits
+                    spiceInstance.erract("SET", "REPORT");
+                    // Log stderr and stdour and reset spice if failed
+                    // TODO not seeing stdErr, spice/timecraft may not be reporting these errors to stderr under "REPORT"
+                    // mode so our try/catch exceptions may not be getting called. Need to sort out best way of handling
+                    // errors from spice/timecraft and figure out if it is plugin or aerie UI that needs to know if a
+                    // particular function failed.
+                    // Currently if parsing fails, say on a sol out of range, an invalid date will be returned
+                    spiceInstance.onStdErr = function (err) {
+                        console.error(err);
+                        if (spiceInstance.failed()) {
+                            spiceInstance.reset();
+                        }
+                    };
+                    spiceInstance.onStdOut = function (err) {
+                        console.log(err);
+                        if (spiceInstance.failed()) {
+                            spiceInstance.reset();
+                        }
+                    };
+                    console.log("Spice initialized", spiceInstance);
                     return [2 /*return*/, true];
                 case 3:
                     error_1 = _a.sent();
@@ -4491,7 +4514,7 @@ var LMST_TIME = "HH:mm:ss";
 var lmstPattern = /(\d+)M(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)/;
 var ROUNDING_MS = 500;
 // This function doesn't use surface epoch or mars seconds since it is purely for rounding times
-function round(s) {
+function roundLMST(s) {
     var m = s.match(lmstPattern);
     if (m) {
         var year = 2020;
@@ -4510,7 +4533,7 @@ function round(s) {
 }
 function formatPrimaryTime(date) {
     var dateWithoutTZ = date.toISOString().slice(0, -1);
-    return round(utcStringToLMST(dateWithoutTZ));
+    return roundLMST(utcStringToLMST(dateWithoutTZ));
 }
 function formatTickLMST(date, viewDurationMs, tickCount) {
     return formatPrimaryTime(date);
@@ -4528,7 +4551,7 @@ function getPlugin() {
                                 time: {
                                     enableDatePicker: false,
                                     getDefaultPlanEndDate: function (start) {
-                                        // Format to LMST, add a day, parse back to Date
+                                        // Format to LMST, add a sol, parse back to Date
                                         var lmst = formatPrimaryTime(start);
                                         var sols = +lmst.split("M")[0];
                                         return lmstToUTC("".concat(sols + 1, "M").concat(lmst.split("M")[1]));
@@ -4570,4 +4593,4 @@ function getPlugin() {
     });
 }
 
-export { getPlugin, lmstTicks, round };
+export { getPlugin, lmstTicks, roundLMST };
