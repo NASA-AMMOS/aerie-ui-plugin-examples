@@ -240,7 +240,7 @@ async function initializeSpice() {
 
     spiceInstance.erract("SET", "REPORT");
 
-    // Log stderr and stdour and reset spice if failed
+    // Log stderr and stdout and reset spice if failed
     // TODO not seeing stdErr, spice/timecraft may not be reporting these errors to stderr under "REPORT"
     // mode so our try/catch exceptions may not be getting called. Need to sort out best way of handling
     // errors from spice/timecraft and figure out if it is plugin or aerie UI that needs to know if a
