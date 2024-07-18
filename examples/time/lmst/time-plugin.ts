@@ -53,10 +53,10 @@ function trimLeadingZeroes(s: string): string {
   return parseInt(s, 10).toString(10);
 }
 
-function lmstToEphemeris(lmst: string): number {
+function lmstToEphemeris(lmst: string): number | null {
   const matcher = lmst.match(DISPLAY_LMST_RE);
   if (!matcher) {
-    return NaN;
+    return null;
   }
 
   const sol = trimLeadingZeroes(matcher[1] || "");
@@ -70,7 +70,7 @@ function lmstToEphemeris(lmst: string): number {
   return spiceInstance.scs2e(LMST_SPACECRAFT_ID, sclkch);
 }
 
-function ephemerisToLMST(et: number): string {
+function ephemerisToLMST(et: number): string | null {
   const lmst = spiceInstance.sce2s(LMST_SPACECRAFT_ID, et);
   // something like "1/01641:07:16:13:65583"
   const m = lmst.match(SPICE_LMST_RE);
@@ -82,7 +82,7 @@ function ephemerisToLMST(et: number): string {
     const subsecs = m[5] || "0";
     return sol + "M" + hour + ":" + mins + ":" + secs + "." + subsecs;
   }
-  return "";
+  return null;
 }
 
 function ephemerisToSCLK(et: number): string {
@@ -106,42 +106,45 @@ function ephemerisToUTC(et: number): Date {
   return new Date(spiceInstance.et2utc(et, "ISOC", 6) + "Z");
 }
 
-function lmstToUTC(lmst: string): Date {
+function lmstToUTC(lmst: string): Date | null {
   if (spiceInstance) {
     try {
       const et = lmstToEphemeris(lmst);
+      if (typeof et !== "number") {
+        throw new Error(`Ephemeris time not a number: ${et}`);
+      }
       return ephemerisToUTC(et);
     } catch (error) {
       console.log("LMST Plugin Error: lmstToUTC:", error);
     }
   }
-  return new Date(Number.MAX_SAFE_INTEGER);
+  return null;
 }
 
-function utcStringToLMST(utc: string): string {
+function utcStringToLMST(utc: string): string | null {
   if (spiceInstance) {
     try {
       const et = spiceInstance.str2et(utc);
       return ephemerisToLMST(et);
     } catch (error) {
       console.error("LMST Plugin Error: utcStringToLMST:", utc, error);
-      return "Invalid";
+      return null;
     }
   }
-  return "Invalid";
+  return null;
 }
 
-function utcStringToSCLK(utc: string): string {
+function utcStringToSCLK(utc: string): string | null {
   if (spiceInstance) {
     try {
       const et = spiceInstance.str2et(utc);
       return ephemerisToSCLK(et);
     } catch (error) {
       console.error(error);
-      return "Invalid";
+      return null;
     }
   }
-  return "Invalid";
+  return null;
 }
 
 export function lmstTicks(start: Date, stop: Date, tickCount: number): Date[] {
@@ -211,8 +214,10 @@ export function lmstTicks(start: Date, stop: Date, tickCount: number): Date[] {
     .map((x) => lmstToUTC(msss0_to_lmst(x * 24 * 60 * 60)))
     .filter(
       (date) =>
-        date.getTime() >= start.getTime() && date.getTime() <= stop.getTime()
-    );
+        date &&
+        date.getTime() >= start.getTime() &&
+        date.getTime() <= stop.getTime()
+    ) as Date[];
 
   return ticks;
 }
@@ -245,7 +250,6 @@ async function initializeSpice() {
     // mode so our try/catch exceptions may not be getting called. Need to sort out best way of handling
     // errors from spice/timecraft and figure out if it is plugin or aerie UI that needs to know if a
     // particular function failed.
-    // Currently if parsing fails, say on a sol out of range, an invalid date will be returned
     spiceInstance.onStdErr = (err: string) => {
       if (spiceInstance.failed()) {
         const msg = spiceInstance.getmsg("LONG");
@@ -317,14 +321,18 @@ export function roundLMST(s: string) {
 
 function formatPrimaryTime(date: Date) {
   const dateWithoutTZ = date.toISOString().slice(0, -1);
-  return roundLMST(utcStringToLMST(dateWithoutTZ));
+  const lmst = utcStringToLMST(dateWithoutTZ);
+  if (!lmst) {
+    return null;
+  }
+  return roundLMST(lmst);
 }
 
 function formatTickLMST(
   date: Date,
   viewDurationMs: number,
   tickCount: number
-): string {
+): string | null {
   return formatPrimaryTime(date);
 }
 
@@ -337,6 +345,9 @@ export async function getPlugin() {
         getDefaultPlanEndDate: (start: Date) => {
           // Format to LMST, add a sol, parse back to Date
           const lmst = formatPrimaryTime(start);
+          if (!lmst) {
+            return null;
+          }
           const sols = +lmst.split("M")[0];
           return lmstToUTC(`${sols + 1}M${lmst.split("M")[1]}`);
         },

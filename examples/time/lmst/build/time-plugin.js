@@ -4301,7 +4301,7 @@ function trimLeadingZeroes(s) {
 function lmstToEphemeris(lmst) {
     var matcher = lmst.match(DISPLAY_LMST_RE);
     if (!matcher) {
-        return NaN;
+        return null;
     }
     var sol = trimLeadingZeroes(matcher[1] || "");
     var hour = matcher[2] || "";
@@ -4325,7 +4325,7 @@ function ephemerisToLMST(et) {
         var subsecs = m[5] || "0";
         return sol + "M" + hour + ":" + mins + ":" + secs + "." + subsecs;
     }
-    return "";
+    return null;
 }
 function ephemerisToSCLK(et) {
     var sclkStr = spiceInstance.sce2s(-SPACECRAFT_ID, et);
@@ -4349,13 +4349,16 @@ function lmstToUTC(lmst) {
     if (spiceInstance) {
         try {
             var et = lmstToEphemeris(lmst);
+            if (typeof et !== "number") {
+                throw new Error("Ephemeris time not a number: ".concat(et));
+            }
             return ephemerisToUTC(et);
         }
         catch (error) {
             console.log("LMST Plugin Error: lmstToUTC:", error);
         }
     }
-    return new Date(Number.MAX_SAFE_INTEGER);
+    return null;
 }
 function utcStringToLMST(utc) {
     if (spiceInstance) {
@@ -4365,10 +4368,10 @@ function utcStringToLMST(utc) {
         }
         catch (error) {
             console.error("LMST Plugin Error: utcStringToLMST:", utc, error);
-            return "Invalid";
+            return null;
         }
     }
-    return "Invalid";
+    return null;
 }
 function utcStringToSCLK(utc) {
     if (spiceInstance) {
@@ -4378,10 +4381,10 @@ function utcStringToSCLK(utc) {
         }
         catch (error) {
             console.error(error);
-            return "Invalid";
+            return null;
         }
     }
-    return "Invalid";
+    return null;
 }
 function lmstTicks(start, stop, tickCount) {
     var lmstStart = utcStringToLMST(start.toISOString().slice(0, -1));
@@ -4445,7 +4448,9 @@ function lmstTicks(start, stop, tickCount) {
     var ticks = range(minValRounded, maxValRounded, stepSize)
         .map(function (x) { return lmstToUTC(msss0_to_lmst(x * 24 * 60 * 60)); })
         .filter(function (date) {
-        return date.getTime() >= start.getTime() && date.getTime() <= stop.getTime();
+        return date &&
+            date.getTime() >= start.getTime() &&
+            date.getTime() <= stop.getTime();
     });
     return ticks;
 }
@@ -4472,12 +4477,11 @@ function initializeSpice() {
                     }
                     spiceInstance = initializingSpice;
                     spiceInstance.erract("SET", "REPORT");
-                    // Log stderr and stdour and reset spice if failed
+                    // Log stderr and stdout and reset spice if failed
                     // TODO not seeing stdErr, spice/timecraft may not be reporting these errors to stderr under "REPORT"
                     // mode so our try/catch exceptions may not be getting called. Need to sort out best way of handling
                     // errors from spice/timecraft and figure out if it is plugin or aerie UI that needs to know if a
                     // particular function failed.
-                    // Currently if parsing fails, say on a sol out of range, an invalid date will be returned
                     spiceInstance.onStdErr = function (err) {
                         if (spiceInstance.failed()) {
                             var msg = spiceInstance.getmsg("LONG");
@@ -4540,7 +4544,11 @@ function roundLMST(s) {
 }
 function formatPrimaryTime(date) {
     var dateWithoutTZ = date.toISOString().slice(0, -1);
-    return roundLMST(utcStringToLMST(dateWithoutTZ));
+    var lmst = utcStringToLMST(dateWithoutTZ);
+    if (!lmst) {
+        return null;
+    }
+    return roundLMST(lmst);
 }
 function formatTickLMST(date, viewDurationMs, tickCount) {
     return formatPrimaryTime(date);
@@ -4560,6 +4568,9 @@ function getPlugin() {
                                     getDefaultPlanEndDate: function (start) {
                                         // Format to LMST, add a sol, parse back to Date
                                         var lmst = formatPrimaryTime(start);
+                                        if (!lmst) {
+                                            return null;
+                                        }
                                         var sols = +lmst.split("M")[0];
                                         return lmstToUTC("".concat(sols + 1, "M").concat(lmst.split("M")[1]));
                                     },
