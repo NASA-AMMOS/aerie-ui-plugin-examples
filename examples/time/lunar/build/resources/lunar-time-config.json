@@ -1,0 +1,26 @@
+{
+  "landingEpochUtc": "2025-03-02T08:34:00",
+  "defaultPlanDurationDays": 14,
+  "spacecraft": [
+    {
+      "name": "Peregrine",
+      "spiceId": -244,
+      "sclkKernel": "/resources/kernels/clps_to2ab_apm1_v02.tsc"
+    },
+    {
+      "name": "IM-1",
+      "spiceId": -370011,
+      "sclkKernel": "/resources/kernels/clps_to2im_im1_v01.tsc"
+    },
+    {
+      "name": "Blue Ghost",
+      "spiceId": -2711,
+      "sclkKernel": "/resources/kernels/clps_to19d_bgm1_v01.tsc"
+    },
+    {
+      "name": "IM-2",
+      "spiceId": -370021,
+      "sclkKernel": "/resources/kernels/clps_prime1_im2_v01.tsc"
+    }
+  ]
+}
