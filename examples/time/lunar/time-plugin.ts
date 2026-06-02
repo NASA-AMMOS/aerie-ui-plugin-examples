@@ -2,9 +2,12 @@ const CAL_UTC_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/;
 const DOY_UTC_RE = /^(\d{4})-(\d{3})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/;
 const DEFAULT_PLAN_DAYS = 14;
 
-// LST midnight in UTC for south pole landing at 0° longitude (placeholder).
-const LST_LOCAL_MIDNIGHT_UTC = "2028-09-18T18:22:00";
-// The lunar mean solar day is ~29.5306 Earth days.
+// LMST midnight in UTC for south pole landing at 0° longitude (placeholder).
+// 24-hour-per-lunar-sol uniform mean clock. True apparent solar position drifts
+// from this by up to ~±30 LMST minutes peak due to lunar orbital eccentricity
+// (e≈0.055, 3× Earth's). Adequate for phase-of-day indication; not a precision
+// solar clock. The lunar mean solar day is ~29.5306 Earth days.
+const LMST_LOCAL_MIDNIGHT_UTC = "2028-09-18T18:22:00";
 const LUNAR_SOL_SECONDS = 29.530589 * 86400;
 
 const PT_FMT = new Intl.DateTimeFormat("en-CA", {
@@ -80,7 +83,7 @@ function formatPDT(date: Date): string {
   );
 }
 
-function formatLST(date: Date, localMidnight: Date): string {
+function formatLMST(date: Date, localMidnight: Date): string {
   const elapsedSec = (date.getTime() - localMidnight.getTime()) / 1000;
   const solsRaw = elapsedSec / LUNAR_SOL_SECONDS;
   const sols = Math.floor(solsRaw);
@@ -98,17 +101,17 @@ function formatLST(date: Date, localMidnight: Date): string {
 }
 
 export async function getPlugin() {
-  const lstMidnight = parseUTC(LST_LOCAL_MIDNIGHT_UTC);
+  const lmstMidnight = parseUTC(LMST_LOCAL_MIDNIGHT_UTC);
   const additional: Array<{
     format: (date: Date) => string | null;
     label: string;
   }> = [
     { format: formatPDT, label: "PDT" },
   ];
-  if (lstMidnight) {
+  if (lmstMidnight) {
     additional.push({
-      format: (date: Date) => formatLST(date, lstMidnight),
-      label: "LST",
+      format: (date: Date) => formatLMST(date, lmstMidnight),
+      label: "LMST",
     });
   }
   return {

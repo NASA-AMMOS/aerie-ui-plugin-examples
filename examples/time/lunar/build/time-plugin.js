@@ -61,9 +61,12 @@ typeof SuppressedError === "function" ? SuppressedError : function (error, suppr
 var CAL_UTC_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/;
 var DOY_UTC_RE = /^(\d{4})-(\d{3})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/;
 var DEFAULT_PLAN_DAYS = 14;
-// LST midnight in UTC for south pole landing at 0° longitude (placeholder).
-var LST_LOCAL_MIDNIGHT_UTC = "2028-09-18T18:22:00";
-// The lunar mean solar day is ~29.5306 Earth days.
+// LMST midnight in UTC for south pole landing at 0° longitude (placeholder).
+// 24-hour-per-lunar-sol uniform mean clock. True apparent solar position drifts
+// from this by up to ~±30 LMST minutes peak due to lunar orbital eccentricity
+// (e≈0.055, 3× Earth's). Adequate for phase-of-day indication; not a precision
+// solar clock. The lunar mean solar day is ~29.5306 Earth days.
+var LMST_LOCAL_MIDNIGHT_UTC = "2028-09-18T18:22:00";
 var LUNAR_SOL_SECONDS = 29.530589 * 86400;
 var PT_FMT = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
@@ -126,7 +129,7 @@ function formatPDT(date) {
     return ("".concat(get("year"), "-").concat(get("month"), "-").concat(get("day"), " ") +
         "".concat(get("hour"), ":").concat(get("minute"), ":").concat(get("second")));
 }
-function formatLST(date, localMidnight) {
+function formatLMST(date, localMidnight) {
     var elapsedSec = (date.getTime() - localMidnight.getTime()) / 1000;
     var solsRaw = elapsedSec / LUNAR_SOL_SECONDS;
     var sols = Math.floor(solsRaw);
@@ -143,16 +146,16 @@ function formatLST(date, localMidnight) {
 }
 function getPlugin() {
     return __awaiter(this, void 0, void 0, function () {
-        var lstMidnight, additional;
+        var lmstMidnight, additional;
         return __generator(this, function (_a) {
-            lstMidnight = parseUTC(LST_LOCAL_MIDNIGHT_UTC);
+            lmstMidnight = parseUTC(LMST_LOCAL_MIDNIGHT_UTC);
             additional = [
                 { format: formatPDT, label: "PDT" },
             ];
-            if (lstMidnight) {
+            if (lmstMidnight) {
                 additional.push({
-                    format: function (date) { return formatLST(date, lstMidnight); },
-                    label: "LST",
+                    format: function (date) { return formatLMST(date, lmstMidnight); },
+                    label: "LMST",
                 });
             }
             return [2 /*return*/, {
