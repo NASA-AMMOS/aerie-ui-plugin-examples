@@ -61,13 +61,23 @@ typeof SuppressedError === "function" ? SuppressedError : function (error, suppr
 var CAL_UTC_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/;
 var DOY_UTC_RE = /^(\d{4})-(\d{3})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/;
 var DEFAULT_PLAN_DAYS = 14;
-// LMST midnight in UTC for south pole landing at 0° longitude (placeholder).
+// LMST midnight in UTC for south pole landing.
 // 24-hour-per-lunar-sol uniform mean clock. True apparent solar position drifts
 // from this by up to ~±30 LMST minutes peak due to lunar orbital eccentricity
 // (e≈0.055, 3× Earth's). Adequate for phase-of-day indication; not a precision
 // solar clock. The lunar mean solar day is ~29.5306 Earth days.
-var LMST_LOCAL_MIDNIGHT_UTC = "2028-09-18T18:22:00";
+// Compute lunar midnight from an earth midnight + given LMST,
+// ex: say the lunar solar time is 05:00 on 10/21/2028 00:00 UTC Earth.
 var LUNAR_SOL_SECONDS = 29.530589 * 86400;
+var LUNAR_HOUR_SECONDS = (29.530589 * 86400) / 24;
+var TARGET_EARTH_MIDNIGHT = "2028-10-21T00:00:00Z";
+var LUNAR_HOURS_AFTER_LUNAR_MIDNIGHT = 5;
+var LMST_LOCAL_MIDNIGHT_UTC = new Date(new Date(TARGET_EARTH_MIDNIGHT).getTime() -
+    LUNAR_HOURS_AFTER_LUNAR_MIDNIGHT * LUNAR_HOUR_SECONDS * 1000)
+    .toISOString()
+    .replace("Z", "");
+// Alternatively you can just specify a known LMST midnight in UTC.
+// const LMST_LOCAL_MIDNIGHT_UTC = "2028-10-14T20:21:00";
 var PT_FMT = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
     year: "numeric",
@@ -129,15 +139,21 @@ function formatPDT(date) {
     return ("".concat(get("year"), "-").concat(get("month"), "-").concat(get("day"), " ") +
         "".concat(get("hour"), ":").concat(get("minute"), ":").concat(get("second")));
 }
+/**
+ *
+ * @param date Earth Date UTC
+ * @param localMidnight local lunar midnight
+ * @returns
+ */
 function formatLMST(date, localMidnight) {
-    var elapsedSec = (date.getTime() - localMidnight.getTime()) / 1000;
-    var solsRaw = elapsedSec / LUNAR_SOL_SECONDS;
-    var sols = Math.floor(solsRaw);
-    var fraction = ((solsRaw % 1) + 1) % 1;
-    var totalSeconds = Math.floor(fraction * 86400);
-    var hours = Math.floor(totalSeconds / 3600);
-    var minutes = Math.floor((totalSeconds % 3600) / 60);
-    var seconds = totalSeconds % 60;
+    var elapsedSec = (date.getTime() - localMidnight.getTime()) / 1000; // earth seconds between date and lunar midnight
+    var solsRaw = elapsedSec / LUNAR_SOL_SECONDS; // lunar sols between date and lunar midnight, can be fractional and negative
+    var sols = Math.floor(solsRaw); // whole lunar sols between date and lunar midnight, can be negative
+    var fraction = ((solsRaw % 1) + 1) % 1; // fractional part of lunar sol delta, in range [0, 1)
+    var totalSeconds = Math.floor(fraction * 86400); // lunar seconds since last lunar midnight, in range [0, 86400)
+    var hours = Math.floor(totalSeconds / 3600); // lunar hours since last lunar midnight, in range [0, 24)
+    var minutes = Math.floor((totalSeconds % 3600) / 60); // lunar minutes since last lunar hour, in range [0, 60)
+    var seconds = totalSeconds % 60; // lunar seconds since last lunar minute, in range [0, 60)
     var pad = function (n) { return String(n).padStart(2, "0"); };
     var solStr = sols < 0
         ? "-" + String(-sols).padStart(4, "0")
@@ -149,9 +165,7 @@ function getPlugin() {
         var lmstMidnight, additional;
         return __generator(this, function (_a) {
             lmstMidnight = parseUTC(LMST_LOCAL_MIDNIGHT_UTC);
-            additional = [
-                { format: formatPDT, label: "PDT" },
-            ];
+            additional = [{ format: formatPDT, label: "PDT" }];
             if (lmstMidnight) {
                 additional.push({
                     format: function (date) { return formatLMST(date, lmstMidnight); },
