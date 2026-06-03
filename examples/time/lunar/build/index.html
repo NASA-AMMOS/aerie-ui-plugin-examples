@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<script>
+  (async () => {
+    const lib = await import("./time-plugin.js");
+    const plugin = await lib.getPlugin();
+    const date = new Date();
+    document.getElementById("utc-primary").innerHTML = plugin.time.primary.format(date);
+    const rows = (plugin.time.additional || []).map((entry) => {
+      const value = entry.format(date);
+      return `<div><b>${entry.label}:</b> <span>${value ?? "—"}</span></div>`;
+    });
+    document.getElementById("additional").innerHTML = rows.join("\n");
+  })();
+</script>
+<html>
+  <body style="font-family: sans-serif">
+    <h3>Aerie UI Time Plugin Example - Lunar (Moonfall-class)</h3>
+    <div>
+      <b>UTC (primary):</b>
+      <span id="utc-primary"></span>
+    </div>
+    <div id="additional"></div>
+  </body>
+</html>
